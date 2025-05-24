@@ -1,0 +1,90 @@
+import hashlib
+import time
+import os
+
+def calculate_md5(filepath):
+    """Calculates the MD5 hash of a given file."""
+    hasher = hashlib.md5()
+    try:
+        with open(filepath, 'rb') as f:
+            # Read the file in chunks to handle large files efficiently
+            for chunk in iter(lambda: f.read(4096), b''):
+                hasher.update(chunk)
+        return hasher.hexdigest()
+    except FileNotFoundError:
+        return None # Return None if the file doesn't exist
+    except Exception as e:
+        print(f"Error calculating hash for {filepath}: {e}")
+        return None
+
+def simple_tripwire(filepath, interval_seconds=5):
+    """
+    A simple file integrity monitoring tripwire.
+
+    Args:
+        filepath (str): The path to the file to monitor.
+        interval_seconds (int): How often to check the file (in seconds).
+    """
+    print(f"--- Simple Tripwire Started ---")
+    print(f"Monitoring file: {filepath}")
+    print(f"Checking every {interval_seconds} seconds.")
+
+    # 1. Establish the baseline
+    baseline_hash = calculate_md5(filepath)
+    if baseline_hash is None:
+        print(f"Error: File '{filepath}' not found or accessible. Exiting.")
+        return
+
+    print(f"Initial baseline MD5 hash: {baseline_hash}")
+    print(f"Make a change to '{filepath}' to trigger the tripwire!")
+    print("-" * 30)
+
+    try:
+        while True:
+            time.sleep(interval_seconds)
+            current_hash = calculate_md5(filepath)
+
+            if current_hash is None:
+                print(f"[TRIPWIRE ALERT] File '{filepath}' no longer exists!")
+                break # Exit if the file is deleted
+            elif current_hash != baseline_hash:
+                print(f"[TRIPWIRE ALERT] File '{filepath}' has been MODIFIED!")
+                print(f"  Old hash: {baseline_hash}")
+                print(f"  New hash: {current_hash}")
+                # You could add further actions here, like logging to a file,
+                # sending an email, or triggering another security action.
+                
+                # For this simple example, we'll update the baseline and continue
+                # monitoring for further changes. If you want it to stop after
+                # the first alert, you can uncomment 'break' below.
+                # break
+                baseline_hash = current_hash # Update baseline to acknowledge the change
+                print(f"  New baseline set to: {baseline_hash}")
+            else:
+                # print(f"File '{filepath}' is unchanged.") # Uncomment for verbose output
+                pass # No change, continue monitoring
+
+    except KeyboardInterrupt:
+        print("\n--- Tripwire Stopped by User ---")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+# --- How to use this tripwire ---
+if __name__ == "__main__":
+    # Create a dummy file to monitor
+    monitored_file = "my_secret_file.txt"
+    with open(monitored_file, "w") as f:
+        f.write("This is my original secret content.\n")
+        f.write("Keep it safe!\n")
+
+    print(f"Created a dummy file: {monitored_file}")
+    print("Try modifying this file while the script is running.")
+    print("-" * 30)
+
+    # Run the tripwire
+    simple_tripwire(monitored_file, interval_seconds=3)
+
+    # Clean up the dummy file
+    if os.path.exists(monitored_file):
+        os.remove(monitored_file)
+        print(f"\nCleaned up: {monitored_file}")
